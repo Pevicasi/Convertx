@@ -1,6 +1,0 @@
-node_modules/
-backend/uploads/*
-backend/converted/*
-backend/temp/*
-.env
-.DS_Store
