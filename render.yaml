@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: conversor-central
+    env: docker
+    plan: free
+    autoDeploy: true
