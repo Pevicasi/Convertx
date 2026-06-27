@@ -1,6 +1,6 @@
 {
   "name": "conversor-central",
-  "version": "2.3.0",
+  "version": "1.9.0",
   "private": true,
   "description": "Conversor simples para central multimídia",
   "main": "server.js",

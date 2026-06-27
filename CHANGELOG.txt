@@ -1,16 +1,14 @@
-Atualização v2.3 - YouTube + fila com download manual
+Atualização v2.2
+
+Correção da fila:
+- Remove download automático em sequência.
+- Mostra botão Baixar AVI para cada vídeo concluído.
+- Evita bloqueio de múltiplos downloads pelo Chrome/Android.
+- Melhora tolerância a falhas temporárias no acompanhamento da conversão.
 
 Substituir:
-- server.js
-- Dockerfile
-- package.json
 - public/index.html
 - public/style.css
 - public/script.js
 
-O que faz:
-- Adiciona campo para link do YouTube.
-- Adiciona links e arquivos na mesma fila.
-- Converte um por um.
-- Mostra botão Baixar AVI para cada item concluído.
-- Usa yt-dlp no Docker.
+Não altera server.js.
