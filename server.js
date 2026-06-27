@@ -47,6 +47,26 @@ function nomeSeguro(nome) {
     .slice(0, 70);
 }
 
+function normalizarUrlYouTube(url) {
+  try {
+    const u = new URL(url);
+
+    if (u.hostname.includes("youtu.be")) {
+      const id = u.pathname.replace("/", "");
+      return "https://www.youtube.com/watch?v=" + id;
+    }
+
+    if (u.hostname.includes("youtube.com")) {
+      const id = u.searchParams.get("v");
+      if (id) return "https://www.youtube.com/watch?v=" + id;
+    }
+
+    return url;
+  } catch {
+    return url;
+  }
+}
+
 function iniciarConversao(id, entrada, nomeBase, pastaTemp = null) {
   const saida = path.join("output", id + ".avi");
 
@@ -76,7 +96,6 @@ function iniciarConversao(id, entrada, nomeBase, pastaTemp = null) {
 
   ffmpeg.stderr.on("data", data => {
     const texto = data.toString();
-
     const dur = texto.match(/Duration: (\d+:\d+:\d+\.\d+)/);
     if (dur) duracao = tempoParaSegundos(dur[1]);
 
@@ -164,7 +183,8 @@ app.post("/convert", upload.single("video"), (req, res) => {
 });
 
 app.post("/convert-url", (req, res) => {
-  const url = String(req.body.url || "").trim();
+  const urlOriginal = String(req.body.url || "").trim();
+  const url = normalizarUrlYouTube(urlOriginal);
 
   if (!url) return res.status(400).json({ erro: "Link vazio." });
 
@@ -183,15 +203,36 @@ app.post("/convert-url", (req, res) => {
   const ytdlp = spawn("yt-dlp", [
     "--no-playlist",
     "--restrict-filenames",
-    "-f", "bv*+ba/b",
+    "--socket-timeout", "30",
+    "--retries", "3",
+    "--fragment-retries", "3",
+    "--user-agent", "Mozilla/5.0",
+    "-f", "best[height<=480]/best",
     "-o", saidaModelo,
     url
   ]);
 
+  let erroYtdlp = "";
+
+  ytdlp.stderr.on("data", d => {
+    erroYtdlp += d.toString();
+    console.log("yt-dlp:", d.toString());
+  });
+
+  ytdlp.stdout.on("data", d => {
+    console.log("yt-dlp:", d.toString());
+  });
+
   ytdlp.on("close", code => {
     if (code !== 0) {
       jobs[id].status = "erro";
-      jobs[id].erro = "Erro ao baixar o link.";
+
+      let msg = "Erro ao baixar o link.";
+      if (erroYtdlp.includes("Sign in")) msg = "YouTube pediu login ou bloqueou o servidor.";
+      if (erroYtdlp.includes("HTTP Error 403")) msg = "YouTube bloqueou o download no Render.";
+      if (erroYtdlp.includes("Unsupported URL")) msg = "Link não suportado.";
+
+      jobs[id].erro = msg;
       removerPasta(pasta);
       return;
     }
