@@ -9,6 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static("public"));
+app.use(express.json({ limit: "1mb" }));
 
 for (const dir of ["uploads", "output"]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir);
@@ -32,6 +33,12 @@ function limpar(arquivo) {
   } catch {}
 }
 
+function removerPasta(pasta) {
+  try {
+    if (pasta && fs.existsSync(pasta)) fs.rmSync(pasta, { recursive: true, force: true });
+  } catch {}
+}
+
 function nomeSeguro(nome) {
   return String(nome || "video")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -40,21 +47,14 @@ function nomeSeguro(nome) {
     .slice(0, 70);
 }
 
-app.post("/convert", upload.single("video"), (req, res) => {
-  if (!req.file) return res.status(400).json({ erro: "Nenhum vídeo enviado." });
-
-  const id = crypto.randomBytes(8).toString("hex");
-  const entrada = req.file.path;
-  const nomeBase = nomeSeguro(path.parse(req.file.originalname).name);
+function iniciarConversao(id, entrada, nomeBase, pastaTemp = null) {
   const saida = path.join("output", id + ".avi");
 
-  jobs[id] = {
-    status: "convertendo",
-    progresso: 0,
-    saida,
-    nomeDownload: nomeBase + "_central.avi",
-    erro: null
-  };
+  jobs[id].status = "convertendo";
+  jobs[id].progresso = 0;
+  jobs[id].saida = saida;
+  jobs[id].nomeDownload = nomeSeguro(nomeBase) + "_central.avi";
+  jobs[id].pastaTemp = pastaTemp;
 
   const ffmpeg = spawn("ffmpeg", [
     "-y",
@@ -89,6 +89,7 @@ app.post("/convert", upload.single("video"), (req, res) => {
 
   ffmpeg.on("close", code => {
     limpar(entrada);
+    if (pastaTemp) removerPasta(pastaTemp);
 
     if (code !== 0) {
       jobs[id].status = "erro";
@@ -103,7 +104,7 @@ app.post("/convert", upload.single("video"), (req, res) => {
     const ffprobe = spawn("ffprobe", [
       "-v", "error",
       "-select_streams", "v:0",
-      "-show_entries", "stream=codec_name,width,height,r_frame_rate",
+      "-show_entries", "stream=codec_name,width,height",
       "-show_entries", "format=format_name",
       "-of", "json",
       saida
@@ -146,6 +147,70 @@ app.post("/convert", upload.single("video"), (req, res) => {
         limpar(saida);
       }
     });
+  });
+}
+
+app.post("/convert", upload.single("video"), (req, res) => {
+  if (!req.file) return res.status(400).json({ erro: "Nenhum vídeo enviado." });
+
+  const id = crypto.randomBytes(8).toString("hex");
+  const entrada = req.file.path;
+  const nomeBase = nomeSeguro(path.parse(req.file.originalname).name);
+
+  jobs[id] = { status: "convertendo", progresso: 0, erro: null };
+  iniciarConversao(id, entrada, nomeBase);
+
+  res.json({ id });
+});
+
+app.post("/convert-url", (req, res) => {
+  const url = String(req.body.url || "").trim();
+
+  if (!url) return res.status(400).json({ erro: "Link vazio." });
+
+  const id = crypto.randomBytes(8).toString("hex");
+  const pasta = path.join("uploads", id);
+  fs.mkdirSync(pasta, { recursive: true });
+
+  jobs[id] = {
+    status: "baixando",
+    progresso: 0,
+    erro: null
+  };
+
+  const saidaModelo = path.join(pasta, "%(title).80s.%(ext)s");
+
+  const ytdlp = spawn("yt-dlp", [
+    "--no-playlist",
+    "--restrict-filenames",
+    "-f", "bv*+ba/b",
+    "-o", saidaModelo,
+    url
+  ]);
+
+  ytdlp.on("close", code => {
+    if (code !== 0) {
+      jobs[id].status = "erro";
+      jobs[id].erro = "Erro ao baixar o link.";
+      removerPasta(pasta);
+      return;
+    }
+
+    let arquivos = [];
+    try {
+      arquivos = fs.readdirSync(pasta).map(a => path.join(pasta, a));
+    } catch {}
+
+    if (!arquivos.length) {
+      jobs[id].status = "erro";
+      jobs[id].erro = "Nenhum arquivo baixado.";
+      removerPasta(pasta);
+      return;
+    }
+
+    const entrada = arquivos[0];
+    const nomeBase = path.parse(entrada).name;
+    iniciarConversao(id, entrada, nomeBase, pasta);
   });
 
   res.json({ id });

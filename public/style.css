@@ -11,7 +11,7 @@ padding:20px;
 }
 .container{
 background:white;
-width:400px;
+width:410px;
 max-width:100%;
 padding:24px;
 border-radius:10px;
@@ -19,7 +19,11 @@ box-shadow:0 4px 15px rgba(0,0,0,.15);
 text-align:center;
 }
 h2{margin-top:0}
-input{width:100%;margin:15px 0}
+input{
+width:100%;
+margin:10px 0;
+padding:8px;
+}
 button{
 width:100%;
 padding:12px;
@@ -29,7 +33,9 @@ background:#1565c0;
 color:white;
 font-size:15px;
 cursor:pointer;
+margin-top:8px;
 }
+#adicionar-link{background:#444}
 button:disabled{opacity:.6;cursor:not-allowed}
 .progress{
 margin-top:15px;
